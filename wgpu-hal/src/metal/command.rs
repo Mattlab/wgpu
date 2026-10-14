@@ -1377,7 +1377,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         index: u32,
         binding: crate::BufferBinding<'a, super::Buffer>,
     ) {
-        let buffer_index = self.shared.private_caps.max_vertex_buffers as u64 - 1 - index as u64;
+        let buffer_index = self.shared.private_caps.max_buffers_per_stage as u64 - 1 - index as u64;
         let encoder = self.state.render.as_ref().unwrap();
         unsafe {
             encoder.setVertexBuffer_offset_atIndex(

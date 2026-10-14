@@ -1276,6 +1276,23 @@ impl crate::Device for super::Device {
                     ts_info = None;
                     ms_info = None;
 
+                    // Validate vertex buffer count
+                    if vertex_buffers.len() > self.shared.private_caps.max_vertex_buffers as usize
+                        || u32::try_from(vertex_buffers.len()).ok()
+                        .and_then(|count| desc.layout.total_counters.vs.buffers.checked_add(count))
+                        .is_none_or(|total| total > self.shared.private_caps.max_buffers_per_stage)
+                    {
+                        let msg = format!(
+                            "pipeline needs too many buffers in the vertex stage: {} vertex and {} layout",
+                            vertex_buffers.len(),
+                            desc.layout.total_counters.vs.buffers
+                        );
+                        return Err(crate::PipelineError::Linkage(
+                            wgt::ShaderStages::VERTEX,
+                            msg,
+                        ));
+                    }
+
                     // Collect vertex buffer mappings
                     let mut vertex_buffer_mappings =
                         Vec::<naga::back::msl::VertexBufferMapping>::new();
@@ -1290,7 +1307,7 @@ impl crate::Device for super::Device {
                         }
 
                         let mapping = naga::back::msl::VertexBufferMapping {
-                            id: self.shared.private_caps.max_vertex_buffers - 1 - i as u32,
+                            id: self.shared.private_caps.max_buffers_per_stage - 1 - i as u32,
                             stride: if vbl.array_stride > 0 {
                                 vbl.array_stride.try_into().unwrap()
                             } else {
@@ -1350,27 +1367,12 @@ impl crate::Device for super::Device {
                         });
                     }
 
-                    // Validate vertex buffer count
-                    if desc.layout.total_counters.vs.buffers + (vertex_buffers.len() as u32)
-                        > self.shared.private_caps.max_vertex_buffers
-                    {
-                        let msg = format!(
-                            "pipeline needs too many buffers in the vertex stage: {} vertex and {} layout",
-                            vertex_buffers.len(),
-                            desc.layout.total_counters.vs.buffers
-                        );
-                        return Err(crate::PipelineError::Linkage(
-                            wgt::ShaderStages::VERTEX,
-                            msg,
-                        ));
-                    }
-
                     // Set the pipeline vertex buffer info
                     if !vertex_buffers.is_empty() {
                         let vertex_descriptor = MTLVertexDescriptor::new();
                         for (i, vb) in vertex_buffers.iter().enumerate() {
                             let buffer_index =
-                                self.shared.private_caps.max_vertex_buffers as usize - 1 - i;
+                                self.shared.private_caps.max_buffers_per_stage as usize - 1 - i;
                             let buffer_desc = unsafe {
                                 vertex_descriptor
                                     .layouts()
